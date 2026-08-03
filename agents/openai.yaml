@@ -1,0 +1,4 @@
+interface:
+  display_name: "PISR AIGC Naming"
+  short_description: "按产品组合规范安全命名 PISR 双比例广告素材文件"
+  default_prompt: "Use $pisr-aigc-naming to rename a completed PISR 1:1 and 9:16 batch from its authoritative product names, append _vertical to vertical files, and validate every pair."
