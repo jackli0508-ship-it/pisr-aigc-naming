@@ -9,6 +9,13 @@ Name completed PISR ratio-adjustment outputs from the products actually used in
 each generated look. Treat filenames as delivery metadata: derive them from the
 generation plan, never from visual guesses.
 
+## Task-folder boundary
+
+This skill never creates or renames the total task folder. It receives an
+existing completed task directory and operates in place. Preserve its upstream
+`YYYY-MM-DD-<Title-Kebab-Case>` folder name exactly; this skill controls only
+the filenames of image assets inside the task.
+
 ## Naming contract
 
 - Name a 1:1 file `<product 1>_<product 2>[_<product n>].<ext>`.
@@ -57,7 +64,7 @@ metadata disagrees with the files. Do not invent or shorten a product name.
 
 ```bash
 NAMING_TOOL="$HOME/.codex/skills/pisr-aigc-naming/scripts/naming_batch.py"
-TASK_DIR="/Users/tianyuli/Codex Projects/AIGC/<completed-ratio-task>"
+TASK_DIR="/Users/tianyuli/Codex Projects/AIGC/YYYY-MM-DD-<completed-ratio-task>"
 
 python3 "$NAMING_TOOL" plan --task-dir "$TASK_DIR"
 python3 "$NAMING_TOOL" apply --plan "$TASK_DIR/run/naming-plan.json"
@@ -85,4 +92,3 @@ task directory.
 - Require `validate` to report zero failures and zero unmanaged image files.
 - Preserve the original assets byte-for-byte; successful validation requires
   every post-rename SHA-256 hash to match its pre-rename hash.
-
