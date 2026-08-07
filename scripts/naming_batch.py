@@ -212,6 +212,9 @@ def create_plan(args: argparse.Namespace) -> dict[str, Any]:
     seen_combinations: dict[tuple[str, ...], int] = defaultdict(int)
     planned_files: list[dict[str, Any]] = []
     target_paths: set[str] = set()
+    results_dir = task_dir / "results"
+    if not results_dir.is_dir():
+        raise ValueError(f"Task results directory is missing: {results_dir}")
 
     for image_id in sorted(ratio_jobs, key=image_sort_key):
         pair = ratio_jobs[image_id]
@@ -251,19 +254,24 @@ def create_plan(args: argparse.Namespace) -> dict[str, Any]:
                 raise ValueError(f"Unsupported or missing image extension: {planned_output}")
             filename = base_name + ("_vertical" if ratio == "9x16" else "") + suffix
             ensure_filename_fits(filename)
-            target = planned_output.with_name(filename)
-
-            if planned_output.exists():
-                current = planned_output
-            elif target.exists():
-                current = target
-            else:
+            target = (results_dir / filename).resolve()
+            legacy_named = planned_output.with_name(filename)
+            candidates = []
+            for candidate in (target, planned_output, legacy_named):
+                candidate = candidate.resolve()
+                if candidate.is_file() and candidate not in candidates:
+                    candidates.append(candidate)
+            if not candidates:
                 raise ValueError(
                     f"Neither the ratio-plan output nor its intended target exists: "
                     f"{planned_output} -> {target}"
                 )
-            if target.exists() and current != target:
-                raise ValueError(f"Refusing to overwrite existing target: {target}")
+            if len(candidates) > 1:
+                raise ValueError(
+                    "Multiple copies exist for one ratio asset; resolve before naming: "
+                    + ", ".join(str(path) for path in candidates)
+                )
+            current = candidates[0]
             target_key = str(target)
             if target_key in target_paths:
                 raise ValueError(f"Two assets resolve to the same target: {target}")
@@ -304,6 +312,7 @@ def create_plan(args: argparse.Namespace) -> dict[str, Any]:
             "square": "<product names joined by underscores><duplicate number>.<ext>",
             "vertical": "<square base>_vertical.<ext>",
             "preserve_extension": True,
+            "results_layout": "flat",
         },
         "files": planned_files,
     }
@@ -430,6 +439,16 @@ def apply_plan(args: argparse.Namespace) -> dict[str, Any]:
         item["status"] = "named"
     plan["applied_at"] = now_iso()
     atomic_write_json(plan_path, plan)
+    removed_legacy_folders: list[str] = []
+    results_dir = Path(plan["task_dir"]) / "results"
+    for ratio in REQUIRED_RATIOS:
+        legacy_folder = results_dir / ratio
+        if legacy_folder.is_dir():
+            try:
+                legacy_folder.rmdir()
+                removed_legacy_folders.append(str(legacy_folder))
+            except OSError:
+                pass
     journal["status"] = "complete"
     journal["completed_at"] = now_iso()
     atomic_write_json(journal_path, journal)
@@ -437,6 +456,7 @@ def apply_plan(args: argparse.Namespace) -> dict[str, Any]:
         "renamed": len(actual_moves),
         "already_named": len(files) - len(actual_moves),
         "ratio_plan_jobs_updated": updated_jobs,
+        "removed_legacy_ratio_folders": removed_legacy_folders,
         "journal": str(journal_path),
     }
 
@@ -481,15 +501,32 @@ def validate_plan(args: argparse.Namespace) -> dict[str, Any]:
 
     unmanaged: list[str] = []
     task_dir = Path(plan["task_dir"])
-    for ratio in REQUIRED_RATIOS:
-        folder = task_dir / "results" / ratio
-        if not folder.is_dir():
-            failures.append(f"Missing results folder: {folder}")
-            continue
-        for path in folder.iterdir():
-            if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES:
-                if path.resolve() not in expected_targets:
+    results_dir = task_dir / "results"
+    if not results_dir.is_dir():
+        failures.append(f"Missing results folder: {results_dir}")
+    else:
+        allowed_upstream: set[Path] = set()
+        for image in ratio_plan.get("images", []):
+            if isinstance(image, dict) and isinstance(image.get("input"), str):
+                allowed_upstream.add(Path(image["input"]).resolve())
+        for job in ratio_plan.get("jobs", []):
+            if isinstance(job, dict) and isinstance(job.get("input"), str):
+                allowed_upstream.add(Path(job["input"]).resolve())
+        for path in results_dir.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in IMAGE_SUFFIXES:
+                continue
+            resolved = path.resolve()
+            if resolved in expected_targets:
+                if path.parent.resolve() != results_dir.resolve():
                     unmanaged.append(str(path))
+                continue
+            if resolved in allowed_upstream and path.parent.resolve() == results_dir.resolve():
+                continue
+            unmanaged.append(str(path))
+        for ratio in REQUIRED_RATIOS:
+            legacy_folder = results_dir / ratio
+            if legacy_folder.is_dir():
+                failures.append(f"Legacy ratio folder remains: {legacy_folder}")
     if unmanaged:
         failures.extend(f"Unmanaged image file: {path}" for path in unmanaged)
 

@@ -14,7 +14,9 @@ generation plan, never from visual guesses.
 This skill never creates or renames the total task folder. It receives an
 existing completed task directory and operates in place. Preserve its upstream
 `YYYY-MM-DD-<Title-Kebab-Case>` folder name exactly; this skill controls only
-the filenames of image assets inside the task.
+the filenames of image assets inside the task. Keep every image flat in the
+single `results/` directory. Never create or preserve ratio subfolders in a new
+run.
 
 ## Naming contract
 
@@ -57,10 +59,11 @@ metadata disagrees with the files. Do not invent or shorten a product name.
    suffixes by image order, checks filename length, and rejects collisions.
 2. Read `run/naming-plan.json`. Confirm that every 1:1 and 9:16 pair uses the
    same base and that `_vertical` appears only on 9:16 files.
-3. Apply the plan. The tool uses staged same-folder renames, never overwrites a
-   destination, and updates `run/ratio-plan.json` only after all renames succeed.
+3. Apply the plan. The tool uses staged atomic renames, never overwrites a
+   destination, flattens legacy ratio-subfolder files into `results/`, and
+   updates `run/ratio-plan.json` only after all renames succeed.
 4. Validate hashes, filenames, pair completeness, file counts, and ratio-plan
-   paths. Report the two results folders and any warnings.
+   paths. Report the single results folder and any warnings.
 
 ```bash
 NAMING_TOOL="$HOME/.codex/skills/pisr-aigc-naming/scripts/naming_batch.py"
@@ -88,6 +91,8 @@ task directory.
 - Never overwrite an existing target. Resolve the conflict or duplicate logic
   first.
 - Keep the numeric duplicate suffix synchronized across the 1:1 and 9:16 pair.
+- Determine ratio identity from `ratio-plan.json`, never from a parent folder.
+- Keep final 1:1 and 9:16 files together directly under `results/`.
 - Accept an already-named batch idempotently when filenames and hashes match.
 - Require `validate` to report zero failures and zero unmanaged image files.
 - Preserve the original assets byte-for-byte; successful validation requires
