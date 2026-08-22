@@ -1,6 +1,6 @@
 ---
 name: pisr-aigc-naming
-description: "Create authoritative product-based delivery metadata for PISR AIGC image and video outputs. Use when Codex must name paired 1:1 and 9:16 images from exact product names, prevent filename collisions, validate renamed pairs, or write a scene- and look-grouped video-products.txt manifest without forcing long product names into video filenames."
+description: "Create authoritative product-based delivery metadata for PISR AIGC image and video outputs. Use when Codex must name paired 1:1 and 9:16 images from exact product names, prevent filename collisions, validate renamed pairs, or write one look- and clip-grouped product TXT manifest per delivered video scene group without forcing long product names into video filenames."
 ---
 
 # PISR AIGC Naming
@@ -19,16 +19,16 @@ existing completed task directory and operates in place. Preserve its upstream
 - For image jobs, control only image filenames and keep every image flat in the
   single `results/` directory.
 - For video jobs, leave video filenames unchanged and control only the
-  `results/video-products.txt` delivery manifest.
+  per-scene-group product TXT manifests in `results/`.
 
 Never create ratio or naming subfolders in a new run.
 
 ## Choose an output mode
 
 - Use **image filename mode** for completed 1:1 and 9:16 image pairs.
-- Use **video product manifest mode** when `pisr-aigc-video` hands off one or
-  more final scene groups. Do not apply the image filename contract to `.mp4`
-  files.
+- Use **video scene-group manifest mode** when `pisr-aigc-video` hands off one
+  or more final scene groups. Write one TXT per delivered scene group. Do not
+  apply the image filename contract to `.mp4` files.
 
 ## Naming contract
 
@@ -50,18 +50,20 @@ Example pair:
 1997 POSTOFFICE Distressed Tribal Graphics T-Shirt_DND4DES Star Graffiti Patchwork Cartoon Denim Oversized Shorts_vertical.png
 ```
 
-## Video product manifest contract
+## Video scene-group manifest contract
 
-Write exactly one UTF-8 text file at:
+Write exactly one UTF-8 text file for every delivered scene group at:
 
 ```text
-<video-task>/results/video-products.txt
+<video-task>/results/<scene-group-delivery-stem>-Video-Products.txt
 ```
 
-- Keep scene groups in the user's requested scene order and number them
-  `Scene 01`, `Scene 02`, and so on.
-- Within each scene, keep looks in final clip order and number them `Look 01`,
-  `Look 02`, and so on.
+- Use the authoritative user-facing `scene_group_delivery_stem` handed off by
+  `pisr-aigc-video`; for example, `Ssequence-B07-S06` produces
+  `Ssequence-B07-S06-Video-Products.txt`.
+- Keep looks in final clip order and number them `Look 01`, `Look 02`, and so
+  on.
+- Write the exact final clip filename under its Look.
 - List every product actually used in each look, including accessories, using
   exact authoritative spelling and capitalization.
 - Preserve the official product order supplied by the look or generation plan.
@@ -69,22 +71,28 @@ Write exactly one UTF-8 text file at:
   looks or scenes.
 - Keep full names in the text manifest. Do not abbreviate names to fit a video
   filename and do not rename the final `.mp4` from the full product list.
-- Make the scene count and look count match the approved video scope. Stop if a
-  product ID cannot be resolved or a final clip lacks authoritative lineage.
-- Rewrite the single manifest atomically when the approved scene or look order
+- Make the TXT count match the delivered scene-group count and the Look count
+  in each TXT match that group's final clip count. Stop if a product ID cannot
+  be resolved, a final clip lacks authoritative lineage, or a delivery stem is
+  missing.
+- Rewrite each scene-group TXT atomically when its approved clip or look order
   changes; do not create numbered copies of the text file.
 
 Use this structure:
 
 ```text
-PISR AIGC Video Products
+Ssequence Batch 07 — Scene 06 Video Products
+Source Group: Ssequence-B07-S06-Quartet-Review
 
-Scene 01 — <source_reference_id or scene_group_id>
 Look 01
+Clip: Ssequence-B07-S06-L01-Kling3-3s.mp4
+Products:
 - <official product name>
 - <official product name>
 
 Look 02
+Clip: Ssequence-B07-S06-L02-Kling3-3s.mp4
+Products:
 - <official product name>
 ```
 
@@ -103,11 +111,12 @@ Infer the generation task from `ratio-plan.json.source_dir`. Pass
 cannot be resolved to its official `name`, a ratio pair is incomplete, or the
 metadata disagrees with the files. Do not invent or shorten a product name.
 
-For video product manifest mode, read the final `scene-groups.json`,
+For video scene-group manifest mode, read the final `scene-groups.json`,
 `video-plan.json`, or equivalent authoritative video state plus the upstream
-product catalog or `current-assets.json`. Use the ordered scene groups,
-variants, and clip lineage recorded there. Do not infer products from rendered
-stills or video frames.
+product catalog or `current-assets.json`. Require the video handoff to provide
+each `scene_group_delivery_stem` and ordered final clip filenames. Use the
+ordered scene groups, variants, and clip lineage recorded there. Do not infer
+products from rendered stills or video frames.
 
 ## Image filename workflow
 
@@ -141,17 +150,18 @@ python3 "$NAMING_TOOL" plan \
 Use `--output-plan /absolute/path.json` for a non-mutating dry-run outside the
 task directory.
 
-## Video product manifest workflow
+## Video scene-group manifest workflow
 
 1. Resolve the final user-approved scene scope and ordered clip list.
 2. Resolve every variant's product IDs to official product names from the
    authoritative product catalog.
-3. Build `video-products.txt` in a temporary file using the required Scene and
-   Look structure.
-4. Confirm that the scene count, look count, clip order, and product lists match
-   the final video plan.
-5. Atomically replace `results/video-products.txt` and report it alongside the
-   final video delivery.
+3. For each delivered scene group, build
+   `<scene-group-delivery-stem>-Video-Products.txt` in a temporary file using
+   the required Look, Clip, and Products structure.
+4. Confirm that the TXT count, per-group Look count, exact clip filenames, clip
+   order, and product lists match the final video plan.
+5. Atomically replace every scene-group TXT and report all of them alongside
+   the final video delivery.
 
 ## Safety and acceptance
 
@@ -165,6 +175,7 @@ task directory.
 - Require `validate` to report zero failures and zero unmanaged image files.
 - Preserve the original assets byte-for-byte; successful validation requires
   every post-rename SHA-256 hash to match its pre-rename hash.
-- In video product manifest mode, never rename or modify the video assets.
+- In video scene-group manifest mode, never rename or modify the video assets.
 - Require every listed product name to resolve from authoritative metadata and
-  every final scene and look to appear exactly once in the text structure.
+  every delivered scene group, final clip, and look to appear exactly once
+  across the TXT set.

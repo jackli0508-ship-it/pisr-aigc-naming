@@ -1,4 +1,4 @@
 interface:
   display_name: "PISR AIGC Naming"
-  short_description: "按官方产品名管理 PISR 图片文件名与视频产品清单"
-  default_prompt: "Use $pisr-aigc-naming to name completed PISR image pairs or create a scene- and look-grouped video-products.txt from authoritative product metadata."
+  short_description: "按官方产品名管理图片文件名与每组视频产品清单"
+  default_prompt: "Use $pisr-aigc-naming to name completed PISR image pairs or create one authoritative product TXT manifest per delivered video scene group."
